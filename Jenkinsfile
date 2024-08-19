@@ -42,7 +42,7 @@ pipeline {
                 }
             }
         }
-        stage('Deploy') {
+        stage('Deploy-Stagging') {
             steps {
                 sh 'docker-compose up -d' 
             }
@@ -88,6 +88,11 @@ pipeline {
             }
         }
 
+        stage('Deploy-Prod') {
+            steps {
+                sh 'echo "Deploying to Production"' 
+            }
+        }
 
     }
 
