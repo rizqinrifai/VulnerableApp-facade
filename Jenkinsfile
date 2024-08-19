@@ -23,11 +23,13 @@ pipeline {
             steps {
                 script {
                     echo 'Scanning for vulnerabilities using Trivy...'
-                    sh 'trivy fs --format=json --output=trivy.json .'
+                    // Run the Trivy file system scan and save the results in JSON format
+                    sh 'trivy fs --format json --output trivy.json .'
                 }
+                // Archive the generated Trivy JSON report as a build artifact
                 archiveArtifacts artifacts: 'trivy.json'
-            }
-        }
+    }
+}
         stage('[SAST] SonarQube') {
             steps {
                 script {
@@ -61,7 +63,7 @@ pipeline {
                             docker run --user $(id -u) \
                                 -v ${WORKSPACE}/zap-reports:/zap/wrk \
                                 ghcr.io/zaproxy/zaproxy:stable \
-                                zap-full-scan.py -t http://139.162.18.93:3000 -r /zap/wrk/zap-report.html
+                                zap-full-scan.py -t http://139.162.18.93:8081 -r /zap/wrk/zap-report.html
                         '''
                         // Check if the report was generated
                         sh 'test -f ${WORKSPACE}/zap-reports/zap-report.html'
@@ -79,7 +81,7 @@ pipeline {
                         sh 'docker pull public.ecr.aws/portswigger/dastardly:latest'
                         sh '''
                         docker run --user $(id -u) -v ${WORKSPACE}:${WORKSPACE}:rw \
-                        -e BURP_START_URL=http://139.162.18.93:3000 \
+                        -e BURP_START_URL=http://139.162.18.93:8081 \
                         -e BURP_REPORT_FILE_PATH=${WORKSPACE}/dastardly-report.xml \
                         public.ecr.aws/portswigger/dastardly:latest
                         '''
