@@ -23,10 +23,8 @@ pipeline {
             steps {
                 script {
                     echo 'Scanning for vulnerabilities using Trivy...'
-                    // Run the Trivy file system scan and save the results in JSON format
                     sh 'trivy fs --format json --output trivy.json .'
                 }
-                // Archive the generated Trivy JSON report as a build artifact
                 archiveArtifacts artifacts: 'trivy.json'
     }
 }
@@ -56,23 +54,33 @@ pipeline {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                     script {
                         echo 'Running OWASP ZAP scan...'
-                        sh 'docker --version'  // Check Docker version to ensure Docker is running
-                        sh 'mkdir -p ${WORKSPACE}/zap-reports'  // Ensure the directory exists
+                
+                        // Ensure Docker is available and the workspace directory exists
+                        sh 'docker --version'
+                        sh 'mkdir -p ${WORKSPACE}/zap-reports'
+                
+                        // Pull the latest stable version of the OWASP ZAP Docker image
                         sh 'docker pull ghcr.io/zaproxy/zaproxy:stable'
+                
+                        // Run the OWASP ZAP scan
                         sh '''
                             docker run --user $(id -u) \
                                 -v ${WORKSPACE}/zap-reports:/zap/wrk \
                                 ghcr.io/zaproxy/zaproxy:stable \
                                 zap-full-scan.py -t http://139.162.18.93:8081 -r /zap/wrk/zap-report.html
                         '''
-                        // Check if the report was generated
+                
+                        // Check if the report was successfully generated
                         sh 'test -f ${WORKSPACE}/zap-reports/zap-report.html'
                     }
+            
+                    // Copy the report to the workspace and archive it
                     sh 'cp ${WORKSPACE}/zap-reports/zap-report.html ./zap-report.html'
                     archiveArtifacts artifacts: 'zap-report.html'
                 }
             }
         }
+
 
         stage('[DAST] Dastardly') {
             steps {
