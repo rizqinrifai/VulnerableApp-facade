@@ -23,11 +23,11 @@ pipeline {
             steps {
                 script {
                     echo 'Scanning for vulnerabilities using Trivy...'
-                    sh 'trivy fs --format json --output trivy.json .'
+                    sh 'trivy fs --format=json --output=trivy.json .'
                 }
                 archiveArtifacts artifacts: 'trivy.json'
-    }
-}
+            }
+        }
         stage('[SAST] SonarQube') {
             steps {
                 script {
@@ -48,33 +48,23 @@ pipeline {
                 sh 'docker-compose up -d' 
             }
         }
-
         stage('[DAST] OWASP ZAP') {
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                     script {
                         echo 'Running OWASP ZAP scan...'
-                
-                        // Ensure Docker is available and the workspace directory exists
-                        sh 'docker --version'
-                        sh 'mkdir -p ${WORKSPACE}/zap-reports'
-                
-                        // Pull the latest stable version of the OWASP ZAP Docker image
+                        sh 'docker --version'  // Check Docker version to ensure Docker is running
+                        sh 'mkdir -p ${WORKSPACE}/zap-reports'  // Ensure the directory exists
                         sh 'docker pull ghcr.io/zaproxy/zaproxy:stable'
-                
-                        // Run the OWASP ZAP scan
                         sh '''
                             docker run --user $(id -u) \
                                 -v ${WORKSPACE}/zap-reports:/zap/wrk \
                                 ghcr.io/zaproxy/zaproxy:stable \
                                 zap-full-scan.py -t http://139.162.18.93:8081 -r /zap/wrk/zap-report.html
                         '''
-                
-                        // Check if the report was successfully generated
+                        // Check if the report was generated
                         sh 'test -f ${WORKSPACE}/zap-reports/zap-report.html'
                     }
-            
-                    // Copy the report to the workspace and archive it
                     sh 'cp ${WORKSPACE}/zap-reports/zap-report.html ./zap-report.html'
                     archiveArtifacts artifacts: 'zap-report.html'
                 }
