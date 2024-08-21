@@ -17,23 +17,16 @@ pipeline {
         // Dropdown untuk memilih antara Scan, Release, atau Restart
         choice(name: 'ACTION', choices: ['Scan', 'Release', 'Restart'], description: 'Pilih aksi yang akan dijalankan')
 
-        // Conditional untuk menampilkan branch hanya jika Action adalah Scan
-        choice(name: 'BRANCH_NAME', choices: ['main', 'develop', 'feature/new-feature'], description: 'Nama branch (Hanya untuk Scan)', visibleWhen: {
-            return params.ACTION == 'Scan'
-        })
-
-        // Conditional untuk menampilkan tag hanya jika Action adalah Release
-        choice(name: 'TAG_NAME', choices: ['v1.0.0', 'v1.1.0', 'v2.0.0'], description: 'Nama tag (Hanya untuk Release)', visibleWhen: {
-            return params.ACTION == 'Release'
-        })
+        // Parameter branch dan tag tetap ada, tapi digunakan kondisional di tahapan pipeline
+        choice(name: 'BRANCH_NAME', choices: ['main', 'develop', 'feature/new-feature'], description: 'Nama branch (Hanya untuk Scan)')
+        choice(name: 'TAG_NAME', choices: ['v1.0.0', 'v1.1.0', 'v2.0.0'], description: 'Nama tag (Hanya untuk Release)')
     }
 
     stages {
         stage('Prepare for Scan or Release') {
             when {
                 anyOf {
-                    expression { return params.ACTION == 'Scan' }
-                    expression { return params.ACTION == 'Release' }
+                    expression { return params.ACTION == 'Scan' || params.ACTION == 'Release' }
                 }
             }
             steps {
