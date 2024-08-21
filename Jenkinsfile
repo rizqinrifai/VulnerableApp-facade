@@ -14,18 +14,21 @@ pipeline {
     }
 
     parameters {
-        // Dropdown untuk memilih antara branch atau tag
+        // Dropdown untuk memilih antara Scan, Release, atau Restart
         choice(name: 'ACTION', choices: ['Scan', 'Release', 'Restart'], description: 'Pilih aksi yang akan dijalankan')
 
-        // Dropdown untuk memilih salah satu dari 3 branch
-        choice(name: 'BRANCH_NAME', choices: ['main', 'develop', 'feature/new-feature'], description: 'Nama branch (Hanya digunakan untuk Scan)')
+        // Conditional untuk menampilkan branch hanya jika Action adalah Scan
+        choice(name: 'BRANCH_NAME', choices: ['main', 'develop', 'feature/new-feature'], description: 'Nama branch (Hanya untuk Scan)', visibleWhen: {
+            return params.ACTION == 'Scan'
+        })
 
-        // Dropdown untuk memilih salah satu dari 3 tag
-        choice(name: 'TAG_NAME', choices: ['v1.0.0', 'v1.1.0', 'v2.0.0'], description: 'Nama tag (Hanya digunakan untuk Release)')
+        // Conditional untuk menampilkan tag hanya jika Action adalah Release
+        choice(name: 'TAG_NAME', choices: ['v1.0.0', 'v1.1.0', 'v2.0.0'], description: 'Nama tag (Hanya untuk Release)', visibleWhen: {
+            return params.ACTION == 'Release'
+        })
     }
 
     stages {
-        // Scan hanya akan muncul jika Action adalah "Scan" dan menggunakan branch
         stage('Prepare for Scan or Release') {
             when {
                 anyOf {
@@ -44,6 +47,7 @@ pipeline {
             }
         }
 
+        // Scan stage, hanya muncul jika Action adalah Scan
         stage('[SCA] Trivy Scan') {
             when {
                 expression { return params.ACTION == 'Scan' }
@@ -57,6 +61,7 @@ pipeline {
             }
         }
 
+        // SonarQube SAST scan, hanya muncul jika Action adalah Scan
         stage('[SAST] SonarQube') {
             when {
                 expression { return params.ACTION == 'Scan' }
@@ -75,7 +80,7 @@ pipeline {
             }
         }
 
-        // Stage untuk Release, hanya dijalankan pada Tag
+        // Release stage, hanya muncul jika Action adalah Release
         stage('Release - Deploy Stagging') {
             when {
                 expression { return params.ACTION == 'Release' }
@@ -87,6 +92,7 @@ pipeline {
             }
         }
 
+        // OWASP ZAP scan, hanya muncul jika Action adalah Release
         stage('[DAST] OWASP ZAP') {
             when {
                 expression { return params.ACTION == 'Release' }
@@ -112,6 +118,7 @@ pipeline {
             }
         }
 
+        // Dastardly scan, hanya muncul jika Action adalah Release
         stage('[DAST] Dastardly') {
             when {
                 expression { return params.ACTION == 'Release' }
@@ -132,7 +139,7 @@ pipeline {
             }
         }
 
-        // Stage untuk Restart, hanya menjalankan docker-compose restart
+        // Restart stage, hanya muncul jika Action adalah Restart
         stage('Restart') {
             when {
                 expression { return params.ACTION == 'Restart' }
