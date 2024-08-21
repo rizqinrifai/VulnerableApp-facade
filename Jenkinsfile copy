@@ -13,28 +13,13 @@ pipeline {
         ZAP_DOCKER_IMAGE = 'ghcr.io/zaproxy/zaproxy:stable'
     }
 
-    parameters {
-        // Dropdown untuk memilih antara branch atau tag
-        choice(name: 'BRANCH_OR_TAG', choices: ['branch', 'tag'], description: 'Pilih antara branch atau tag')
-        string(name: 'BRANCH_TAG_NAME', defaultValue: 'main', description: 'Nama branch atau tag yang akan digunakan')
-        choice(name: 'ACTION', choices: ['Scan', 'Release', 'Restart'], description: 'Pilih aksi yang akan dijalankan')
-    }
-
     stages {
-        stage('Prepare') {
+        stage('Clone') {
             steps {
-                script {
-                    echo "Branch/Tag yang digunakan: ${params.BRANCH_TAG_NAME} (type: ${params.BRANCH_OR_TAG})"
-                    echo "Aksi yang dipilih: ${params.ACTION}"
-                }
+                sh 'git clone https://github.com/rizqinrifai/VulnerableApp-facade.git' 
             }
         }
-
-        // Hanya menjalankan proses Scan
         stage('[SCA] Trivy Scan') {
-            when {
-                expression { return params.ACTION == 'Scan' || params.ACTION == 'Release' }
-            }
             steps {
                 script {
                     echo 'Scanning for vulnerabilities using Trivy...'
@@ -43,12 +28,7 @@ pipeline {
                 archiveArtifacts artifacts: 'trivy.json'
             }
         }
-
-        // Hanya menjalankan SonarQube saat "Scan" atau "Release"
         stage('[SAST] SonarQube') {
-            when {
-                expression { return params.ACTION == 'Scan' || params.ACTION == 'Release' }
-            }
             steps {
                 script {
                     def scannerHome = tool name: env.SONARQUBE_SCANNER, type: 'hudson.plugins.sonar.SonarRunnerInstallation'
@@ -62,22 +42,13 @@ pipeline {
                 }
             }
         }
-
-        // Menjalankan build/deploy hanya pada saat "Release"
         stage('Deploy-Stagging') {
-            when {
-                expression { return params.ACTION == 'Release' }
-            }
             steps {
                 sh 'docker-compose pull'
                 sh 'docker-compose up -d' 
             }
         }
-
         stage('[DAST] OWASP ZAP') {
-            when {
-                expression { return params.ACTION == 'Release' }
-            }
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                     script {
@@ -100,10 +71,8 @@ pipeline {
             }
         }
 
+
         stage('[DAST] Dastardly') {
-            when {
-                expression { return params.ACTION == 'Release' }
-            }
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                     script {
@@ -121,23 +90,11 @@ pipeline {
         }
 
         stage('Deploy-Prod') {
-            when {
-                expression { return params.ACTION == 'Release' }
-            }
             steps {
                 sh 'echo "Deploying to Production"' 
             }
         }
 
-        stage('Restart Pipeline') {
-            when {
-                expression { return params.ACTION == 'Restart' }
-            }
-            steps {
-                echo 'Me-restart pipeline...'
-                // Tambahkan logika restart jika diperlukan
-            }
-        }
     }
 
     post {
