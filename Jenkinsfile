@@ -15,39 +15,51 @@ pipeline {
 
     parameters {
         // Dropdown untuk memilih antara branch atau tag
-        choice(name: 'BRANCH_OR_TAG', choices: ['branch', 'tag'], description: 'Pilih antara branch atau tag')
-        string(name: 'BRANCH_TAG_NAME', defaultValue: 'main', description: 'Nama branch atau tag yang akan digunakan')
         choice(name: 'ACTION', choices: ['Scan', 'Release', 'Restart'], description: 'Pilih aksi yang akan dijalankan')
+
+        // Dropdown untuk memilih salah satu dari 3 branch
+        choice(name: 'BRANCH_NAME', choices: ['main', 'develop', 'feature/new-feature'], description: 'Nama branch (Hanya digunakan untuk Scan)')
+
+        // Dropdown untuk memilih salah satu dari 3 tag
+        choice(name: 'TAG_NAME', choices: ['v1.0.0', 'v1.1.0', 'v2.0.0'], description: 'Nama tag (Hanya digunakan untuk Release)')
     }
 
     stages {
-        stage('Prepare') {
+        // Scan hanya akan muncul jika Action adalah "Scan" dan menggunakan branch
+        stage('Prepare for Scan or Release') {
+            when {
+                anyOf {
+                    expression { return params.ACTION == 'Scan' }
+                    expression { return params.ACTION == 'Release' }
+                }
+            }
             steps {
                 script {
-                    echo "Branch/Tag yang digunakan: ${params.BRANCH_TAG_NAME} (type: ${params.BRANCH_OR_TAG})"
-                    echo "Aksi yang dipilih: ${params.ACTION}"
+                    if (params.ACTION == 'Scan') {
+                        echo "Branch yang digunakan: ${params.BRANCH_NAME}"
+                    } else if (params.ACTION == 'Release') {
+                        echo "Tag yang digunakan: ${params.TAG_NAME}"
+                    }
                 }
             }
         }
 
-        // Hanya menjalankan proses Scan
         stage('[SCA] Trivy Scan') {
             when {
-                expression { return params.ACTION == 'Scan' || params.ACTION == 'Release' }
+                expression { return params.ACTION == 'Scan' }
             }
             steps {
                 script {
-                    echo 'Scanning for vulnerabilities using Trivy...'
+                    echo "Melakukan scanning pada branch ${params.BRANCH_NAME} menggunakan Trivy..."
                     sh 'trivy fs --format=json --output=trivy.json .'
                 }
                 archiveArtifacts artifacts: 'trivy.json'
             }
         }
 
-        // Hanya menjalankan SonarQube saat "Scan" atau "Release"
         stage('[SAST] SonarQube') {
             when {
-                expression { return params.ACTION == 'Scan' || params.ACTION == 'Release' }
+                expression { return params.ACTION == 'Scan' }
             }
             steps {
                 script {
@@ -63,12 +75,13 @@ pipeline {
             }
         }
 
-        // Menjalankan build/deploy hanya pada saat "Release"
-        stage('Deploy-Stagging') {
+        // Stage untuk Release, hanya dijalankan pada Tag
+        stage('Release - Deploy Stagging') {
             when {
                 expression { return params.ACTION == 'Release' }
             }
             steps {
+                echo "Deploy Stagging menggunakan tag ${params.TAG_NAME}"
                 sh 'docker-compose pull'
                 sh 'docker-compose up -d' 
             }
@@ -91,7 +104,6 @@ pipeline {
                                 ghcr.io/zaproxy/zaproxy:stable \
                                 zap-full-scan.py -t http://139.162.18.93:8081 -r /zap/wrk/zap-report.html
                         '''
-                        // Check if the report was generated
                         sh 'test -f ${WORKSPACE}/zap-reports/zap-report.html'
                     }
                     sh 'cp ${WORKSPACE}/zap-reports/zap-report.html ./zap-report.html'
@@ -120,22 +132,14 @@ pipeline {
             }
         }
 
-        stage('Deploy-Prod') {
-            when {
-                expression { return params.ACTION == 'Release' }
-            }
-            steps {
-                sh 'echo "Deploying to Production"' 
-            }
-        }
-
-        stage('Restart Pipeline') {
+        // Stage untuk Restart, hanya menjalankan docker-compose restart
+        stage('Restart') {
             when {
                 expression { return params.ACTION == 'Restart' }
             }
             steps {
-                echo 'Me-restart pipeline...'
-                // Tambahkan logika restart jika diperlukan
+                echo 'Me-restart service menggunakan docker-compose...'
+                sh 'docker-compose restart'
             }
         }
     }
